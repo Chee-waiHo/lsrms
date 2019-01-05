@@ -1,0 +1,279 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="css/lsrms.css" rel="stylesheet">
+
+<script>
+
+// Change MAX to accomodate number of seats
+var seatArray = [], soundArray = [], tempArray = [], statusDesc = ["No", "Yes"], MAX = 8, WAIT_DURATION = 5,
+	numSoundSensors = 2, numTempSensors = 2, tooHot = 27, tooCold = 24,
+	SEAT_MAP_FILE = "img/8_seat_lib.jpg",
+	soundLevel = {0:"Acceptable", 1:"Unacceptable!"};
+
+// initialise temperature levels to non detected
+for (i=0; i < numTempSensors; i++) {
+	let sensorName = "field" + parseInt(i+1);
+	tempArray.push({tempSensorRegion:sensorName, status: "No Detection"});
+}
+
+// initialise sound levels to non detected
+for (i=0; i < numSoundSensors; i++) {
+	let sensorName = "field" + parseInt(i+1);
+	soundArray.push({soundSensorRegion:sensorName, status: "No Detection"});
+}
+
+// initialise to all unoccupied
+for (i=0; i < MAX; i++) {
+	seatArray.push({seatNo:i+1, status:1});
+}
+
+// Manual configuration. The X, Y should be captured and stored in database going forward
+// Assume 8 seats currently
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(1));
+seatArray[seatIndex].xpos = 763;
+seatArray[seatIndex].ypos = 200;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(2));
+seatArray[seatIndex].xpos = 955;
+seatArray[seatIndex].ypos = 200;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(3));
+seatArray[seatIndex].xpos = 763;
+seatArray[seatIndex].ypos = 522;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(4));
+seatArray[seatIndex].xpos = 955;
+seatArray[seatIndex].ypos = 522;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(5));
+seatArray[seatIndex].xpos = 283;
+seatArray[seatIndex].ypos = 200;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(6));
+seatArray[seatIndex].xpos = 474;
+seatArray[seatIndex].ypos = 200;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(7));
+seatArray[seatIndex].xpos = 283;
+seatArray[seatIndex].ypos = 522;
+
+seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(8));
+seatArray[seatIndex].xpos = 474;
+seatArray[seatIndex].ypos = 522;
+
+// End Manual Configuration of x, y for each seat
+
+function ajax_post(display){
+    // Create our XMLHttpRequest object
+    var hrTemp = new XMLHttpRequest(),return_data1 = {};
+	
+    var tempURL = "https://api.thingspeak.com/channels/577457/feeds.json?results=1",
+		soundLevelURL = "https://api.thingspeak.com/channels/652210/feeds.json?api_key=T8O6X3ORILXU96JY&results=1",
+		seatUrl = "https://api.thingspeak.com/channels/652149/feeds.json?api_key=H4AWTDUH8WIGRYNT&results=20";
+		
+	// Get temp readings
+	hrTemp.open("GET", tempURL, true);
+	// Set content type header information for sending url encoded variables in the request
+    hrTemp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    // Access the onreadystatechange event for the XMLHttpRequest object
+    hrTemp.onreadystatechange = function() {
+	    if(hrTemp.readyState == 4 && hrTemp.status == 200) {
+			return_data = JSON.parse(hrTemp.responseText)
+			for (i in return_data.feeds) {
+				console.log (return_data.feeds[i]);
+				for (var key in return_data.feeds[i]) {					
+					tempIndex = tempArray.findIndex(x => x.tempSensorRegion === key);
+					if (tempIndex >= 0)
+						tempArray[tempIndex].status = return_data.feeds[i][key];
+				}
+			}
+			console.log(tempArray);
+		}
+	}
+    hrTemp.send(); // Actually execute the request
+	
+	// Get sound sensor readings
+	var hrSound = new XMLHttpRequest()
+	hrSound.open("GET", soundLevelURL, true);
+	// Set content type header information for sending url encoded variables in the request
+    hrSound.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    // Access the onreadystatechange event for the XMLHttpRequest object
+    hrSound.onreadystatechange = function() {
+	    if(hrSound.readyState == 4 && hrSound.status == 200) {
+			return_data = JSON.parse(hrSound.responseText);
+			for (i in return_data.feeds) {
+				console.log (return_data.feeds[i]);
+				for (var key in return_data.feeds[i]) {
+					soundIndex = soundArray.findIndex(x => x.soundSensorRegion === key);
+					if (soundIndex >= 0)
+						soundArray[soundIndex].status = return_data.feeds[i][key];
+				}
+			}
+			console.log(soundArray);
+		}
+	}
+    hrSound.send(); // Actually execute the request
+
+	// Calc the average temperature and sound level settings
+	let totalTempLevel = 0, activeTempSensorCount = 0;
+	for (i=0; i < tempArray.length; i++) {
+		if (tempArray[i].status !== null) {
+			totalTempLevel = totalTempLevel + tempArray[i].status;
+			activeTempSensorCount++;
+		}
+	}
+	let aveTempLevel = totalTempLevel/activeTempSensorCount;
+	
+	let totalSoundLevel = 0, activeSoundSensorCount = 0;
+	for (i=0; i < soundArray.length; i++) {
+		if (soundArray[i].status !== null) {
+			totalSoundLevel = totalSoundLevel + soundArray[i].status;
+			activeSoundSensorCount++;
+		}
+	}
+	let aveSoundLevel = totalSoundLevel/activeSoundSensorCount;
+
+	console.log("Ave temp: " + aveTempLevel + " Ave sound: " + aveSoundLevel);
+	
+	let txt = "<br>";
+	txt += "<table border='1' align = 'center'>";
+	txt += "<tr>";
+	txt += "<th>" + "Temperature" + "</th>";
+	txt += "<th>" + "Sound Level" + "</th>";
+	txt += "</tr>";
+	txt += "<tr>";
+	
+	txt += "<td valign= 'top'>";
+	if (aveTempLevel > tooHot)
+		txt += aveTempLevel + "C <font color='red'>Too hot!</font></td>";
+	else
+		txt += aveTempLevel + "C <font color='green'>Comfortable</font></td>";
+	
+	txt += "<td valign= 'top'>";
+	if (aveSoundLevel > 0)
+		txt += "<font color='yellow'>Too Noisy</font></td>";
+	else
+		txt += "<font color='green'>Acceptable</font></td>";
+	txt += "<tr>";
+	
+	txt += "</table>";
+	document.getElementById("current temp sound").innerHTML = txt;
+	
+	var hrSeat = new XMLHttpRequest();
+    hrSeat.open("GET", seatUrl, true);
+    // Set content type header information for sending url encoded variables in the request
+    hrSeat.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    // Access the onreadystatechange event for the XMLHttpRequest object
+    hrSeat.onreadystatechange = function() {
+	    if(hrSeat.readyState == 4 && hrSeat.status == 200) {
+		    var return_data = JSON.parse(hrSeat.responseText), currDate = new Date();
+			document.getElementById("current_dt").innerHTML = "<br>Seat map last refreshed at " +
+			"<span style='color:blue;font-family:Impact'>" + currDate.getHours() + ":" + currDate.getMinutes() + ":" + currDate.getSeconds() +"</span>";
+			txt = "<br>";
+
+			for (i in return_data.feeds) {
+				updateSeatNo = return_data.feeds[i].field1;
+				updateSeatStatus = return_data.feeds[i].field2;
+				seatIndex = seatArray.findIndex(x => x.seatNo === parseInt(updateSeatNo));
+				seatArray[seatIndex].status = parseInt(updateSeatStatus);
+			}
+			txt += "<table border='1' align = 'center'>";
+			txt += "<tr><td valign= 'top'>";
+			// Draw table to show occupancy
+			txt += "<table border='1' align = 'center'>";
+			txt += "<tr><th>Seat Id</th><th>Available?</th></tr>";
+			for (x in seatArray) {
+				txt += "<tr><td align='center'>" + seatArray[x].seatNo + "</td>";
+				if (seatArray[x].status == 0) { // is occupied
+					txt += "<td align='center'><img src='img/occupied.gif' alt='Occupied' width='20' height='20'>";
+				} else {
+					txt += "<td align='center'><img src='img/vacant.gif' alt='Vacant' width='20' height='20'>";
+				}
+				// txt += statusDesc[seatArray[x].status] + "</td></tr>";
+			}
+			txt += "</table>" ;
+			txt += "</td>";
+			txt += "<td>";
+			// Draw graphic seat map to show occupancy
+			txt += '<div id="hotspotImg" class="responsive-hotspot-wrap row">';			
+			txt += '<img src=' + SEAT_MAP_FILE + ' class="img-responsive" alt="" width="600" height="300">';
+			
+			// draw the location of each seat
+			for (x in seatArray) {
+				// console.log (x + seatArray[x].seatNo + ' ' + seatArray[x].status + ' ' + seatArray[x].xpos + ' ' + seatArray[x].ypos);
+				if (seatArray[x].status == 0) { // is occupied
+					txt += '<div class="red-hot-spot" x=' + seatArray[x].xpos + ' y=' +
+					seatArray[x].ypos + '>';
+					txt += '<div class="red-circle"></div>';
+					txt += '</div>';
+				} else {
+					txt += '<div class="green-hot-spot" x=' + seatArray[x].xpos + ' y=' +
+					seatArray[x].ypos + '>';
+					txt += '<div class="green-circle"></div>';
+					txt += '</div>';
+				}
+			}
+			txt += '</div>';
+			txt += "</td></tr>";
+			txt += "</table><br>" ;
+			// Display the table + seat map
+			document.getElementById(display).innerHTML = txt;
+			
+			$(document).ready (function() {
+				if ($('#hotspotImg').length > 0) {
+					$('#hotspotImg').hotSpot({
+						bindselector: 'click'
+					});
+				}
+			});
+	    }
+    }
+    // Send the data to PHP now... and wait for response to update the status div
+    hrSeat.send(); // Actually execute the request
+    // document.getElementById("status").innerHTML += "Here it comes...";
+}
+
+function countDown(currSecs, toWait, statusElem, displayElem) {
+	document.getElementById(statusElem).innerHTML = "<span style='color:blue;" +
+	"font-family:Impact'>Apologies. </span>" +
+	"Due to limitations " +
+	"of our software license " + "we need to wait " + toWait + " secs before " +
+	"refreshing the page. Counting down... <table align = 'center'><tr><td><br><img src='img/bowing-mini-bex.gif' alt='Apologies' width='100' height='100' align='middle'>" + 
+	"<span style='color:red;background-color:powderblue;font-size:250%;border-style:solid; border-color:black'>" + currSecs + "</span><img src='img/bowing-mini-bex.gif' alt='Apologies' width='100' height='100' align='middle'></table></tr></td>";
+	if (currSecs < 1) {
+		clearTimeout(timer);
+		ajax_post(displayElem);
+		currSecs = toWait + 1;
+	}
+	currSecs--;
+	var timer = setTimeout('countDown('+currSecs+', '+toWait+', "'+statusElem+'","'+displayElem+'")',1000);
+}
+
+</script>
+</head>
+<body bgcolor="deepskyblue">
+<div style="overflow-x:auto;">
+<!-- table border='2 px'><tr><td>
+	<img src='img/RP_logo.png' alt='RP Logo' width='120' height='100'></td>
+	<td><img src='img/SUST_logo.png' alt='SUST Logo' width='150' height='50'></td></tr>
+	<tr><td colspan='2'>Where are the available seats in the library?</td></tr>
+<table -->
+<p><img src='img/RP_logo.png' alt='RP Logo' width='150' height='60' align='left' valign='top'><img src='img/SUST_logo.png' alt='SUST Logo' width='150' height='45' align='right' valign='top'></p>
+<br>
+</div>
+<h2 align = 'center'>Library Seats Available at ...</h2>
+<div id = "status">Let's Check ...</div>
+<div id = "temp_noise_level"></div>
+<div id ="current_dt"></div>
+<div id = "current temp sound"></div>
+<div id="seatMap"></div>
+
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+<script src="js/jquery.hotspot.lsrms.js"></script>
+<script src="js/lsrms.js"></script>
+
+<script>countDown(WAIT_DURATION, WAIT_DURATION,"status", "seatMap");</script>
+
+</body>
+</html>
